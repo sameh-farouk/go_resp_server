@@ -1,11 +1,17 @@
 ## Compile & Run Server
-run the command below to compile the listener into a binary:
+run the command below to compile the server:
 
+```bash
 go build ./cmd/server/
+```
+
 Next, run the server as:
 
+```bash
 ./server
-The above command should run the TCP server and we can make connections to it.
+```
+
+The above command should run the TCP server and we can make tcp connections to it.
 
 ## Testing the TCP Server
 To test the TCP server, you can use redis-cli using the command:
