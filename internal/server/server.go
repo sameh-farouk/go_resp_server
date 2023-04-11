@@ -2,38 +2,49 @@ package server
 
 import (
 	"bufio"
-	"fmt"
 	"io"
+	"log"
 	"net"
-	"os"
 
 	"github.com/sameh-farouk/go_resp_server/internal/commands"
 	"github.com/sameh-farouk/go_resp_server/pkg/resp"
 )
 
-func StartServer(host string, port string, _type string) {
-	l, err := net.Listen(_type, host+":"+port)
+type RespServer struct {
+	host    string
+	port    string
+	network string
+}
+
+func New(host string, port string, network string) RespServer {
+	return RespServer{
+		host,
+		port,
+		network,
+	}
+}
+
+func (s *RespServer) Listen() {
+	l, err := net.Listen(s.network, s.host+":"+s.port)
 	if err != nil {
-		fmt.Println("Error listening:", err.Error())
-		os.Exit(1)
+		log.Fatal("Error listening:", err.Error())
 	}
 
 	defer l.Close()
-	fmt.Println("Listening on " + host + ":" + port)
+	log.Println("Listening on " + s.host + ":" + s.port)
 	for {
 
 		conn, err := l.Accept()
 		if err != nil {
-			fmt.Println("Error accepting: ", err.Error())
-			os.Exit(1)
+			log.Fatal("Error accepting: ", err.Error())
 		}
-		go handleRequest(conn)
+		go s.handleRequest(conn)
 	}
 }
 
 // Handles incoming requests.
-func handleRequest(conn net.Conn) {
-	fmt.Println("Accepted")
+func (s *RespServer) handleRequest(conn net.Conn) {
+	log.Println("Accepted new connection")
 
 	r := bufio.NewReader(conn)
 	respReader := resp.NewReader(r)
@@ -45,33 +56,36 @@ func handleRequest(conn net.Conn) {
 		}
 		command, args, err := respReader.ParseCommand()
 		if err != nil {
-			fmt.Println("Error: ", err)
+			log.Println("Error: ", err)
 			break
 
 		}
-		fmt.Println("command: " + command)
-		fmt.Println("args: ", args)
+		log.Println("command: ", command, "args: ", args)
 
+		// TODO: move to functions on septate handler type
 		switch command {
-		case "hi":
-			res := commands.Hi()
-			conn.Write([]byte("$" + fmt.Sprint(len(res)) + "\r\n" + res + "\r\n"))
+		case "HI":
 
-		case "testurl":
+			res := commands.Hi()
+			respLine := resp.NewRespBulkString(res)
+			conn.Write(respLine)
+
+		case "TESTURL":
 			res, err := commands.TestURL(args)
 			if err != nil {
-				conn.Write([]byte("-" + err.Error() + "\r\n"))
+				conn.Write(resp.NewRespError(err.Error()))
 				break
 			}
-			var bitSetVar int8
+			var bitSetVar int64
 			if res {
 				bitSetVar = 1
 			}
-			conn.Write([]byte(":" + fmt.Sprint(bitSetVar) + "\r\n"))
+			respLine := resp.NewRespInteger(bitSetVar)
+			conn.Write(respLine)
 		default:
-			conn.Write([]byte("-unknown command\r\n"))
+			conn.Write(resp.NewRespError("unknown command"))
 		}
 	}
 	conn.Close()
-	fmt.Println("Connection Closed")
+	log.Println("Connection Closed")
 }

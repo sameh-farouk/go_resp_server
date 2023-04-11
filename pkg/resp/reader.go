@@ -3,9 +3,12 @@ package resp
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"io"
 	"strconv"
+)
+
+const (
+	READER_INITIAL_SIZE = 32 * 1024
 )
 
 type RESPReader struct {
@@ -14,26 +17,27 @@ type RESPReader struct {
 
 func NewReader(reader io.Reader) *RESPReader {
 	return &RESPReader{
-		Reader: bufio.NewReaderSize(reader, 32*1024),
+		Reader: bufio.NewReaderSize(reader, READER_INITIAL_SIZE),
 	}
 }
 
+// this function expects only a RESP Array consisting of only Bulk Strings
+// this is how redis sends commands to the server
 func (r *RESPReader) ParseCommand() (string, []string, error) {
 	// validate type
 	firstToken, err := r.ReadBytes(byte('\n'))
-	if err != nil && err != io.EOF {
-		return "", nil, errors.New("not array! can't parse the command")
+	if err != nil {
+		return "", nil, errors.New("can't find delimiter! can't parse the array\n" + err.Error())
 	}
-	if err == io.EOF {
-		fmt.Println("EOF")
+	if firstToken[0] != ARRAY_PREFIX {
+		return "", nil, errors.New("not array! can't parse the bulk string ")
 	}
 	i64, _ := strconv.ParseInt(string(firstToken[1:len(firstToken)-2]), 10, 0)
 	_len := int(i64)
 
 	if _len < 1 {
-		return "", nil, errors.New("len < 1! can't parse the command")
+		return "", nil, errors.New("len < 1! can't parse the command " + string(firstToken))
 	}
-
 	cmd, err := r.ReadBulkString()
 	if err != nil {
 		return "", nil, err
@@ -51,18 +55,18 @@ func (r *RESPReader) ParseCommand() (string, []string, error) {
 
 }
 
+// parse a bulk string from the reader and advance it to next token
 func (r *RESPReader) ReadBulkString() (string, error) {
 	firstToken, err := r.ReadBytes(byte('\n'))
 	if err != nil {
 		return "", errors.New("can't find delimiter! can't parse the bulk string\n" + err.Error())
 	}
 	if firstToken[0] != BULK_STRING_PREFIX {
-		fmt.Println(firstToken)
 		return "", errors.New("not bulk string! can't parse the bulk string ")
 	}
 	i64, _ := strconv.ParseInt(string(firstToken[1:len(firstToken)-2]), 10, 0)
 	_len := int(i64)
-	// TODO: handle empty and null
+	// TODO: handle empty 0 and null -1
 	buf := make([]byte, _len)
 	n, _ := io.ReadFull(r, buf)
 	if n != _len {

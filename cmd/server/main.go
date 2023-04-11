@@ -11,5 +11,6 @@ const (
 )
 
 func main() {
-	server.StartServer(CONN_HOST, CONN_PORT, CONN_TYPE)
+	server := server.New(CONN_HOST, CONN_PORT, CONN_TYPE)
+	server.Listen()
 }
